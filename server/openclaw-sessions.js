@@ -12,7 +12,7 @@ let cachedSessions = {
     sessions: [],
     agents: [],
     lastScan: null,
-    openclawHome: process.env.OPENCLAW_HOME || '/root/.openclaw',
+    openclawHome: process.env.OPENCLAW_HOME || process.env.MISSION_CONTROL_DIR || './',
 };
 
 // Scan interval in ms
@@ -104,16 +104,28 @@ function scanAgentSessions(agentName) {
  * Get list of configured agents from OpenClaw.
  */
 function getAgentList() {
-    const agentsDir = path.join(cachedSessions.openclawHome, 'agents');
-    try {
-        const entries = fs.readdirSync(agentsDir, { withFileTypes: true });
-        return entries
-            .filter(e => e.isDirectory() && !e.name.startsWith('.'))
-            .map(e => e.name);
-    } catch (err) {
-        console.error('[openclaw-sessions] Error reading agents directory:', err.message);
-        return [];
+    const possibleDirs = [
+        path.join(cachedSessions.openclawHome, 'agents'),
+        path.join(cachedSessions.openclawHome, '.mission-control', 'agents')
+    ];
+    
+    for (const agentsDir of possibleDirs) {
+        try {
+            if (fs.existsSync(agentsDir)) {
+                const entries = fs.readdirSync(agentsDir, { withFileTypes: true });
+                const agents = entries
+                    .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+                    .map(e => e.name);
+                
+                if (agents.length > 0) {
+                    return agents;
+                }
+            }
+        } catch (err) {
+            console.error(`[openclaw-sessions] Error reading directory ${agentsDir}:`, err.message);
+        }
     }
+    return [];
 }
 
 /**
