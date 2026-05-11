@@ -38,6 +38,9 @@ secrets/
 dist/
 build/
 out/
+lib/*
+lib/**
+
 
 # Test coverage
 coverage/
