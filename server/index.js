@@ -17,6 +17,20 @@ const fsSync = require('fs');
 const path = require('path');
 const http = require('http');
 
+// Simple .env loader (v1.6.0)
+const envPath = path.join(__dirname, '..', '.env');
+if (fsSync.existsSync(envPath)) {
+    fsSync.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
+        const [k, ...v] = line.split('=');
+        if (k && v.length) {
+            const key = k.trim();
+            const val = v.join('=').trim().replace(/^["']|["']$/g, '');
+            process.env[key] = val;
+            console.log(`[ENV] ${key}=${val}`);
+        }
+    });
+}
+
 const cookieParser = require('cookie-parser');
 const Tokens = require('csrf');
 
@@ -40,11 +54,17 @@ function sanitizeInput(val) {
 
 // Configuration
 const PORT = process.env.PORT || 3000;
-const MISSION_CONTROL_DIR = path.join(__dirname, '..', '.mission-control');
-const DASHBOARD_DIR = path.join(__dirname, '..', 'dashboard');
+const MISSION_CONTROL_DIR = process.env.MISSION_CONTROL_DIR || path.join(__dirname, '..', '.mission-control');
+const DASHBOARD_DIR = process.env.DASHBOARD_DIR || path.join(__dirname, '..', 'dashboard');
 
 // Initialize Express
 const app = express();
+
+// Request Logger (Debug)
+app.use((req, res, next) => {
+    console.log(`[REQ] ${req.method} ${req.url}`);
+    next();
+});
 
 // Trust proxy (nginx) for correct IP detection and rate limiting
 app.set('trust proxy', 1);
@@ -449,8 +469,27 @@ async function triggerWebhooks(event, data) {
         if (!webhook.events.includes(event) && !webhook.events.includes('*')) continue;
 
         try {
+            let payload = { event, data, timestamp: new Date().toISOString() };
+
+            // ── Discord Payload Formatting (v2.0.9) ──
+            if (webhook.url.includes('discord.com/api/webhooks')) {
+                const title = data.title || data.id || 'Notification';
+                const body = (data.description || '').slice(0, 2000);
+                const color = event.includes('created') ? 0x2ECC71 : (event.includes('deleted') ? 0xE74C3C : 0x3498DB);
+
+                payload = {
+                    embeds: [{
+                        title: `🔔 ${event.toUpperCase()}`,
+                        description: `**${title}**\n${body}`,
+                        color: color,
+                        timestamp: new Date().toISOString(),
+                        footer: { text: "Elite Desktop Agent — Mission Control" }
+                    }]
+                };
+            }
+
             // Enqueue persistent delivery, then attempt immediately
-            const delivery = await webhookDelivery.enqueue(id, webhook.url, event, { event, data, timestamp: new Date().toISOString() });
+            const delivery = await webhookDelivery.enqueue(id, webhook.url, event, payload);
             const result = await webhookDelivery.attemptDelivery(delivery);
 
             if (result.success) {
@@ -1128,6 +1167,113 @@ app.get('/api/activity', async (req, res) => {
     }
 });
 
+// Alias for agents (like agent.py) that post to /api/activity instead of /api/logs/activity
+app.post('/api/activity', async (req, res) => {
+    try {
+        const { actor, action, description } = req.body;
+        await logActivity(actor, action, description);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// =====================================
+// AGENT SOUL WORKSPACE SYNC (v1.5.0)
+// =====================================
+
+const AGENTS_WORKSPACE_DIR = process.env.AGENTS_DIR || '/root/.openclaw/workspace/agents';
+const SOUL_FILES = ['SOUL.md', 'MEMORY.md', 'IDENTITY.md'];
+
+/** Validate agentId — only word chars, hyphens, dots */
+function isValidAgentId(id) {
+    return typeof id === 'string' && /^[a-zA-Z0-9_\-\.]{1,64}$/.test(id);
+}
+
+/** Validate filename is in the allowed SOUL_FILES list */
+function isValidSoulFile(filename) {
+    return SOUL_FILES.includes(filename);
+}
+
+/**
+ * GET /api/agents/list
+ * List all agents in the workspace directory with their file availability.
+ */
+app.get('/api/agents/list', async (req, res) => {
+    try {
+        console.log(`[DEBUG] Scanning for agents in: ${AGENTS_WORKSPACE_DIR}`);
+        const entries = await fs.readdir(AGENTS_WORKSPACE_DIR, { withFileTypes: true });
+        const agents = [];
+        for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
+            if (!isValidAgentId(entry.name)) continue;
+            const agentDir = path.join(AGENTS_WORKSPACE_DIR, entry.name);
+            const files = {};
+            for (const f of SOUL_FILES) {
+                try { await fs.access(path.join(agentDir, f)); files[f] = true; } catch { files[f] = false; }
+            }
+            agents.push({ id: entry.name, dir: agentDir, files });
+        }
+        res.json({ agents, count: agents.length });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * GET /api/agents/soul/:agentId
+ * Get content of all SOUL files for a specific agent.
+ */
+app.get('/api/agents/soul/:agentId', async (req, res) => {
+    const { agentId } = req.params;
+    if (!isValidAgentId(agentId)) return res.status(400).json({ error: 'Invalid agentId' });
+
+    const agentDir = path.join(AGENTS_WORKSPACE_DIR, agentId);
+    const result = { agentId, files: {} };
+
+    try {
+        for (const f of SOUL_FILES) {
+            try {
+                const content = await fs.readFile(path.join(agentDir, f), 'utf8');
+                result.files[f] = { content, exists: true };
+            } catch {
+                result.files[f] = { content: '', exists: false };
+            }
+        }
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * PUT /api/agents/soul/:agentId
+ * Update a specific SOUL file for an agent.
+ */
+app.put('/api/agents/soul/:agentId', async (req, res) => {
+    const { agentId } = req.params;
+    const { filename, content } = req.body;
+
+    if (!isValidAgentId(agentId)) return res.status(400).json({ error: 'Invalid agentId' });
+    if (!isValidSoulFile(filename)) return res.status(400).json({ error: 'Invalid filename' });
+
+    const filePath = path.join(AGENTS_WORKSPACE_DIR, agentId, filename);
+
+    try {
+        await fs.writeFile(filePath, content, 'utf8');
+        const stats = await fs.stat(filePath);
+        res.json({
+            success: true,
+            agentId,
+            filename,
+            size: stats.size,
+            timestamp: stats.mtime.toISOString()
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- AGENTS ---
 
 app.get('/api/agents', async (req, res) => {
@@ -1274,16 +1420,24 @@ app.put('/api/state', async (req, res) => {
 // --- WEBHOOKS ---
 
 app.get('/api/webhooks', (req, res) => {
-    const list = Array.from(webhooks.entries()).map(([id, data]) => ({
-        id,
-        url: data.url,
-        events: data.events,
-        registered_at: data.registered_at,
-        failures: data.failures || 0,
-        circuitState: data.circuitState || 'closed',
-        circuitOpenedAt: data.circuitOpenedAt || null,
-    }));
-    res.json(list);
+    try {
+        const list = Array.from(webhooks.entries()).map(([id, data]) => {
+            if (!data) return { id, url: 'invalid', events: [], circuitState: 'closed' };
+            return {
+                id,
+                url: data.url || '',
+                events: data.events || [],
+                registered_at: data.registered_at || new Date().toISOString(),
+                failures: data.failures || 0,
+                circuitState: data.circuitState || 'closed',
+                circuitOpenedAt: data.circuitOpenedAt || null,
+            };
+        });
+        res.json(list);
+    } catch (error) {
+        logger.error({ err: error.message }, 'Error listing webhooks');
+        res.status(500).json({ error: error.message });
+    }
 });
 
 /**
@@ -1291,17 +1445,21 @@ app.get('/api/webhooks', (req, res) => {
  * Returns per-URL delivery stats: success count, fail count, circuit state.
  */
 app.get('/api/webhooks/status', (req, res) => {
-    const status = Array.from(webhooks.entries()).map(([id, data]) => ({
-        id,
-        url: data.url,
-        events: data.events,
-        successCount: data.successCount || 0,
-        failCount: data.failures || 0,
-        circuitState: data.circuitState || 'closed',
-        circuitOpenedAt: data.circuitOpenedAt || null,
-        lastDelivery: data.lastDelivery || null,
-    }));
-    res.json({ webhooks: status, total: status.length });
+    try {
+        const status = Array.from(webhooks.entries()).map(([id, data]) => ({
+            id,
+            url: data ? data.url : '',
+            events: data ? data.events : [],
+            successCount: data ? (data.successCount || 0) : 0,
+            failCount: data ? (data.failures || 0) : 0,
+            circuitState: data ? (data.circuitState || 'closed') : 'closed',
+            circuitOpenedAt: data ? (data.circuitOpenedAt || null) : null,
+            lastDelivery: data ? (data.lastDelivery || null) : null,
+        }));
+        res.json({ webhooks: status, total: status.length });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 /**
@@ -2378,6 +2536,56 @@ app.get('/api/metrics', async (req, res) => {
 });
 
 // =====================================
+// SYSTEM SETTINGS API (v1.0.0)
+// =====================================
+
+const BACKEND_ENV_PATH = path.join(__dirname, '..', '..', 'backend', '.env');
+
+/**
+ * GET /api/settings
+ * Read current backend configuration
+ */
+app.get('/api/settings', async (req, res) => {
+    try {
+        const settings = {};
+        if (fsSync.existsSync(BACKEND_ENV_PATH)) {
+            const content = fsSync.readFileSync(BACKEND_ENV_PATH, 'utf8');
+            content.split('\n').forEach(line => {
+                const [k, ...v] = line.split('=');
+                if (k && v.length) {
+                    settings[k.trim()] = v.join('=').trim().replace(/^["']|["']$/g, '');
+                }
+            });
+        }
+        res.json(settings);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * POST /api/settings
+ * Update backend configuration
+ */
+app.post('/api/settings', async (req, res) => {
+    try {
+        const newSettings = req.body;
+        let content = "";
+        
+        // Wenn Datei existiert, lesen wir sie ein um Kommentare zu erhalten (optional)
+        // Aber hier schreiben wir sie einfach neu für maximale Stabilität
+        for (const [key, value] of Object.entries(newSettings)) {
+            content += `${key}=${value}\n`;
+        }
+        
+        fsSync.writeFileSync(BACKEND_ENV_PATH, content, 'utf8');
+        res.json({ ok: true, message: "Settings saved. Please restart the agent." });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// =====================================
 // Claude Code Session Routes (v1.2.0)
 // =====================================
 
@@ -2798,46 +3006,10 @@ function getGithubConfig() {
     return { token, repo };
 }
 
+
 // =====================================
-// AGENT SOUL WORKSPACE SYNC (v1.5.0)
+// GITHUB SYNC (v1.6.0)
 // =====================================
-
-const AGENTS_WORKSPACE_DIR = process.env.AGENTS_DIR || '/root/.openclaw/workspace/agents';
-const SOUL_FILES = ['SOUL.md', 'MEMORY.md', 'IDENTITY.md'];
-
-/** Validate agentId — only word chars, hyphens, dots */
-function isValidAgentId(id) {
-    return typeof id === 'string' && /^[a-zA-Z0-9_\-\.]{1,64}$/.test(id);
-}
-
-/** Validate filename is in the allowed SOUL_FILES list */
-function isValidSoulFile(filename) {
-    return SOUL_FILES.includes(filename);
-}
-
-/**
- * GET /api/agents/list
- * List all agents in the workspace directory with their file availability.
- */
-app.get('/api/agents/list', async (req, res) => {
-    try {
-        const entries = await fs.readdir(AGENTS_WORKSPACE_DIR, { withFileTypes: true });
-        const agents = [];
-        for (const entry of entries) {
-            if (!entry.isDirectory()) continue;
-            if (!isValidAgentId(entry.name)) continue;
-            const agentDir = path.join(AGENTS_WORKSPACE_DIR, entry.name);
-            const files = {};
-            for (const f of SOUL_FILES) {
-                try { await fs.access(path.join(agentDir, f)); files[f] = true; } catch { files[f] = false; }
-            }
-            agents.push({ id: entry.name, dir: agentDir, files });
-        }
-        res.json({ agents, count: agents.length });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
 
 /**
  * GET /api/agents/soul/:agentId

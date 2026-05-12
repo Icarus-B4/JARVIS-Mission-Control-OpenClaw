@@ -5,7 +5,7 @@
     <meta name="googlebot" content="noindex, nofollow">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JARVIS Mission Control</title>
+    <title>Elite Mission Control</title>
     <!-- Preconnect to Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -38,8 +38,8 @@
                 <span></span>
             </button>
             <h1 class="logo">
-                <span class="logo-icon">J</span>
-                JARVIS Mission Control
+                <span class="logo-icon">E</span>
+                Elite Mission Control
             </h1>
             <span class="version">v2.0.4</span>
         </div>
@@ -84,6 +84,10 @@
             <button class="btn btn-secondary" onclick="openSchedulesPanel()" title="Scheduled Jobs">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                 Schedules
+            </button>
+            <button id="settings-btn" class="btn btn-secondary" onclick="openSettingsPanel()" title="System Settings">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                Settings
             </button>
             <button class="btn btn-secondary" id="refresh-btn" onclick="forceRefreshBoard()" title="Reload all tasks from server">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -504,7 +508,7 @@
                     <!-- Dashboard Name -->
                     <div class="setting-item">
                         <label for="dashboard-name">Dashboard Name</label>
-                        <input type="text" id="dashboard-name" value="JARVIS Mission Control" placeholder="Enter dashboard name...">
+                        <input type="text" id="dashboard-name" value="Elite Mission Control" placeholder="Enter dashboard name...">
                         <button class="btn-small" onclick="saveDashboardName()">Save</button>
                     </div>
 
@@ -606,7 +610,7 @@
     <footer class="footer">
         <div class="footer-content">
             <div class="footer-left">
-                <span class="footer-brand">JARVIS Mission Control</span>
+                <span class="footer-brand">Elite Mission Control</span>
                 <span class="footer-divider">|</span>
                 <span class="footer-tagline">Git-based Task Orchestration for AI Agents</span>
             </div>
@@ -1607,6 +1611,54 @@
         </div>
     </div>
 
+    <!-- System Settings Panel (v1.0.0) -->
+    <div class="agent-profile-panel" id="settings-panel" style="display:none; width:500px; max-width:95vw;">
+        <div class="panel-header-gradient">
+            <div class="panel-header-icon">⚙️</div>
+            <div class="panel-header-text">
+                <h3>Elite System Settings</h3>
+                <p>Configure the AI brain & environment</p>
+            </div>
+            <button class="close-btn profile-close" onclick="closeSettingsPanel()" aria-label="Close">&times;</button>
+        </div>
+        <div class="profile-panel-body" style="padding:20px;">
+            <form id="settings-form" onsubmit="saveSystemSettings(event)">
+                <div class="settings-group">
+                    <label style="display:block; margin-bottom:8px; font-weight:600; color:var(--accent-primary);">AI Brain (LLM Provider)</label>
+                    <select id="setting-LLM_PROVIDER" class="form-control" style="width:100%; padding:8px; border-radius:4px; background:var(--bg-primary); border:1px solid var(--border-color); color:var(--text-primary);">
+                        <option value="openai">OpenAI Realtime (Cloud / Fast)</option>
+                        <option value="ollama">Ollama (Local / Private)</option>
+                    </select>
+                </div>
+                
+                <div class="settings-group" style="margin-top:20px;">
+                    <label style="display:block; margin-bottom:8px; font-weight:600; color:var(--accent-primary);">Ollama Configuration</label>
+                    <div style="display:grid; gap:10px;">
+                        <div>
+                            <span style="font-size:11px; color:var(--text-muted);">Model Name</span>
+                            <input type="text" id="setting-OLLAMA_MODEL" class="form-control" placeholder="e.g. deepseek-r1:8b" style="width:100%; padding:8px; border-radius:4px; background:var(--bg-primary); border:1px solid var(--border-color); color:var(--text-primary);" />
+                        </div>
+                        <div>
+                            <span style="font-size:11px; color:var(--text-muted);">Ollama API URL</span>
+                            <input type="text" id="setting-OLLAMA_URL" class="form-control" placeholder="http://localhost:11434/v1" style="width:100%; padding:8px; border-radius:4px; background:var(--bg-primary); border:1px solid var(--border-color); color:var(--text-primary);" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-group" style="margin-top:20px;">
+                    <label style="display:block; margin-bottom:8px; font-weight:600; color:var(--accent-primary);">User Identity</label>
+                    <input type="text" id="setting-USER_NAME" class="form-control" placeholder="Admin" style="width:100%; padding:8px; border-radius:4px; background:var(--bg-primary); border:1px solid var(--border-color); color:var(--text-primary);" />
+                </div>
+
+                <div style="margin-top:30px; display:flex; gap:10px;">
+                    <button type="submit" class="btn btn-primary" style="flex:1;">Save Settings</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeSettingsPanel()">Cancel</button>
+                </div>
+                <p id="settings-status" style="font-size:11px; text-align:center; margin-top:10px; color:var(--text-muted);"></p>
+            </form>
+        </div>
+    </div>
+
     <script src="./js/api.js"></script>
     <script src="./js/data.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
@@ -1620,6 +1672,7 @@
     <script src="./js/soul-files.js"></script>
     <script src="./js/webhooks.js"></script>
     <script src="./js/update-banner.js"></script>
+    <script src="./js/settings.js"></script>
     <script src="./js/smart-panels.js"></script>
     <script src="./js/events-feed.js"></script>
     <script>

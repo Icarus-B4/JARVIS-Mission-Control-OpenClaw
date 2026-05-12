@@ -6,7 +6,7 @@
  */
 
 const MissionControlAPI = {
-    baseUrl: '', // Same origin - no need for full URL
+    baseUrl: 'http://localhost:3000', // Fixed to MC server port
     ws: null,
     wsReconnectAttempts: 0,
     maxReconnectAttempts: 5,

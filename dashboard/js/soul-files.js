@@ -12,13 +12,17 @@ let soulOriginalContent = null;
 async function openSoulPanel() {
     const panel = document.getElementById('soul-panel');
     if (!panel) return;
+    panel.classList.add('open');
     panel.style.display = 'block';
     await loadAgentList();
 }
 
 function closeSoulPanel() {
     const panel = document.getElementById('soul-panel');
-    if (panel) panel.style.display = 'none';
+    if (panel) {
+        panel.classList.remove('open');
+        panel.style.display = 'none';
+    }
 }
 
 async function loadAgentList() {
@@ -26,8 +30,7 @@ async function loadAgentList() {
     if (!select) return;
     select.innerHTML = '<option value="">Loading…</option>';
     try {
-        const res = await fetch(`${SOUL_API}/api/agents/list`);
-        const data = await res.json();
+        const data = await MissionControlAPI.request('/agents/list');
         const agents = data.agents || [];
 
         const subtitle = document.getElementById('soul-agents-subtitle');
@@ -84,13 +87,7 @@ async function loadSoulFile() {
     if (saveStatus) saveStatus.textContent = '';
 
     try {
-        const res = await fetch(`${SOUL_API}/api/agents/soul/${encodeURIComponent(agentId)}`);
-        const data = await res.json();
-
-        if (!res.ok) {
-            if (editor) editor.value = `Error: ${data.error || 'Failed to load'}`;
-            return;
-        }
+        const data = await MissionControlAPI.request(`/agents/soul/${encodeURIComponent(agentId)}`);
 
         const fileData = data.files?.[filename];
         const content = fileData?.content || '';
@@ -122,14 +119,10 @@ async function saveSoulFile() {
     if (saveStatus) { saveStatus.textContent = 'Saving…'; saveStatus.style.color = 'var(--text-muted)'; }
 
     try {
-        const res = await fetch(`${SOUL_API}/api/agents/soul/${encodeURIComponent(agentId)}`, {
+        const data = await MissionControlAPI.request(`/agents/soul/${encodeURIComponent(agentId)}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ filename, content }),
         });
-        const data = await res.json();
-
-        if (!res.ok) throw new Error(data.error || 'Save failed');
 
         soulOriginalContent = content;
         if (saveStatus) {
