@@ -53,7 +53,7 @@ function sanitizeInput(val) {
 }
 
 // Configuration
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 const MISSION_CONTROL_DIR = process.env.MISSION_CONTROL_DIR || path.join(__dirname, '..', '.mission-control');
 const DASHBOARD_DIR = process.env.DASHBOARD_DIR || path.join(__dirname, '..', 'dashboard');
 
