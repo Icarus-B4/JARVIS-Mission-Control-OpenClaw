@@ -568,7 +568,7 @@ async function handleFileChange(action, filePath) {
 // =====================================
 
 // Serve dashboard static files
-
+app.use(express.static(DASHBOARD_DIR));
 // --- TASKS ---
 
 app.get('/api/tasks', async (req, res) => {
