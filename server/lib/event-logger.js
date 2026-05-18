@@ -10,48 +10,74 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const EventEmitter = require('events');
+const os = require('os');
+const fs = require('fs');
 
 class EventLogger extends EventEmitter {
   constructor(dbPath) {
     super();
-    this.dbPath = dbPath || path.join(__dirname, '../../.mission-control/events.db');
+    
+    // Auto-resolve writable path for MSIX/Production
+    if (!dbPath) {
+      const defaultPath = path.join(__dirname, '../../.mission-control/events.db');
+      const isPackaged = __dirname.includes('WindowsApps') || __dirname.includes('Program Files');
+      
+      if (isPackaged) {
+        dbPath = path.join(os.homedir(), '.elite-agent', 'mission-control', 'events.db');
+      } else {
+        dbPath = defaultPath;
+      }
+    }
+
+    this.dbPath = dbPath;
+    
+    // Ensure directory exists
+    const dbDir = path.dirname(this.dbPath);
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+
     this.db = null;
     this.init();
   }
 
   init() {
-    this.db = new Database(this.dbPath);
-    
-    // Create events table
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp TEXT NOT NULL DEFAULT (datetime('now')),
-        agent TEXT NOT NULL,
-        type TEXT NOT NULL,
-        summary TEXT NOT NULL,
-        cost REAL DEFAULT 0,
-        metadata TEXT DEFAULT '{}',
-        created_at INTEGER DEFAULT (strftime('%s', 'now'))
-      );
+    try {
+      this.db = new Database(this.dbPath);
       
-      CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp DESC);
-      CREATE INDEX IF NOT EXISTS idx_events_agent ON events(agent);
-      CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
-    `);
+      // Create events table
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+          agent TEXT NOT NULL,
+          type TEXT NOT NULL,
+          summary TEXT NOT NULL,
+          cost REAL DEFAULT 0,
+          metadata TEXT DEFAULT '{}',
+          created_at INTEGER DEFAULT (strftime('%s', 'now'))
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_events_agent ON events(agent);
+        CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
+      `);
 
-    // Prepared statements for performance
-    this.insertStmt = this.db.prepare(`
-      INSERT INTO events (timestamp, agent, type, summary, cost, metadata)
-      VALUES (datetime('now'), ?, ?, ?, ?, ?)
-    `);
+      // Prepared statements for performance
+      this.insertStmt = this.db.prepare(`
+        INSERT INTO events (timestamp, agent, type, summary, cost, metadata)
+        VALUES (datetime('now'), ?, ?, ?, ?, ?)
+      `);
 
-    // Note: dynamic query built in query() method for better NULL handling
-
-    // Cleanup old events (keep 30 days)
-    this.db.exec(`
-      DELETE FROM events WHERE created_at < strftime('%s', 'now', '-30 days')
-    `);
+      // Cleanup old events (keep 30 days)
+      this.db.exec(`
+        DELETE FROM events WHERE created_at < strftime('%s', 'now', '-30 days')
+      `);
+      console.log(`[EventLogger] SQLite initialized at: ${this.dbPath}`);
+    } catch (err) {
+      console.error(`[EventLogger] Failed to initialize SQLite (MSIX restriction?): ${err.message}`);
+      this.db = null; // Fallback mode
+    }
   }
 
   /**
@@ -73,6 +99,13 @@ class EventLogger extends EventEmitter {
     const validTypes = ['chat', 'tool', 'search', 'email', 'cron', 'error', 'approval', 'status'];
     if (!validTypes.includes(type)) {
       throw new Error(`Invalid event type: ${type}. Must be one of: ${validTypes.join(', ')}`);
+    }
+
+    if (!this.db) {
+      const newEvent = { id: Date.now(), timestamp: new Date().toISOString(), agent, type, summary, cost, metadata };
+      console.log(`[EventLogger-Memory] ${agent}: ${summary}`);
+      this.emit('event', newEvent);
+      return newEvent;
     }
 
     const result = this.insertStmt.run(
@@ -107,6 +140,8 @@ class EventLogger extends EventEmitter {
    * @param {number} [filters.limit=50] - Max results
    */
   query({ agent = null, type = null, limit = 50 } = {}) {
+    if (!this.db) return [];
+
     // Build dynamic query for better NULL handling
     const conditions = [];
     const params = [];
@@ -158,6 +193,8 @@ class EventLogger extends EventEmitter {
       WHERE date(timestamp) = date('now')
       GROUP BY type
     `).all();
+
+    if (!this.db) return { totalEvents: 0, totalCost: 0, activeAgents: 0, byAgent: [], byType: [] };
 
     return {
       ...stats,
