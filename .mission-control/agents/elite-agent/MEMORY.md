@@ -168,4 +168,5 @@
   2. Danach erst `session.clear_user_turn()` zum Leeren des Input-Buffers.
   3. Abschließend Dashboard-Benachrichtigung via LiveKit Data Channel.
 - **SDK-Version**: LiveKit Agents SDK 1.5.8 bestätigt (`AgentSession.interrupt(force=True) -> Future[None]`).
+- **AEC-Warmup reduziert (3.0s → 0.5s)**: Ein zweiter Grund für das Nicht-Reagieren auf "Stopp" war der `aec_warmup_duration`-Parameter der `AgentSession`. Standardmäßig blockiert das SDK Unterbrechungen für **3 Sekunden** nach Beginn einer KI-Sprachausgabe (Acoustic Echo Cancellation). In diesen 3s werden alle Barge-In-Versuche (inkl. "Stopp") vom SDK geschluckt. Der Wert wurde auf `0.5s` reduziert, um sofortige Reaktionsfähigkeit zu gewährleisten. Dies kann minimal mehr Echo-Feedback verursachen, aber die Steuerbarkeit der KI hat Priorität.
 
