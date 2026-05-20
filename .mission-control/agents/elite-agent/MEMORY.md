@@ -158,3 +158,14 @@
 - **Whisper beam_size erhöht**: In `backend/local_voice.py` wurde `beam_size` von 3 auf 5 erhöht, um die Transkriptionsgenauigkeit bei mehrdeutiger Mundart-Phonetik zu verbessern (auf Kosten von ca. 20% mehr Rechenzeit pro Segment).
 - **Limitierung dokumentiert**: Echtes Schweizerdeutsch-STT erfordert spezialisierte Modelle (z.B. Recapp/SwissText). Die aktuelle Lösung verbessert die Toleranz erheblich, kann aber nicht alle Dialektvarianten zuverlässig transkribieren.
 
+### 2026-05-20 06:15 - Fix: Stop-Befehl unterbricht Sprachausgabe nicht
+- **Ursache**: Der Stop-Command-Handler in `backend/agent.py` (Zeilen 512–548) hatte drei Fehler:
+  1. `session.interrupt()` gibt ein `asyncio.Future` zurück (kein Coroutine). Der alte Code prüfte `asyncio.iscoroutine(result)`, was für Futures `False` ergibt → das Future wurde **niemals awaited** und die Unterbrechung lief ins Leere.
+  2. `clear_user_turn()` wurde **vor** `interrupt()` aufgerufen — damit wurde der Input-Buffer gelöscht, aber die laufende Sprachgenerierung lief ungestört weiter.
+  3. `force=True` wurde nicht übergeben, obwohl die Methode diesen Parameter für harte Unterbrechungen vorsieht.
+- **Fix**: Kompletter Rewrite des Handlers als saubere `async def force_interrupt()`:
+  1. `session.interrupt(force=True)` wird aufgerufen und das Future korrekt mit `await` abgewartet.
+  2. Danach erst `session.clear_user_turn()` zum Leeren des Input-Buffers.
+  3. Abschließend Dashboard-Benachrichtigung via LiveKit Data Channel.
+- **SDK-Version**: LiveKit Agents SDK 1.5.8 bestätigt (`AgentSession.interrupt(force=True) -> Future[None]`).
+
