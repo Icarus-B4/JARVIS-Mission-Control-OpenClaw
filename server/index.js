@@ -17,18 +17,33 @@ const fsSync = require('fs');
 const path = require('path');
 const http = require('http');
 
-// Simple .env loader (v1.6.0)
-const envPath = path.join(__dirname, '..', '.env');
-if (fsSync.existsSync(envPath)) {
-    fsSync.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
-        const [k, ...v] = line.split('=');
-        if (k && v.length) {
-            const key = k.trim();
-            const val = v.join('=').trim().replace(/^["']|["']$/g, '');
-            process.env[key] = val;
-            console.log(`[ENV] ${key}=${val}`);
-        }
-    });
+function loadEnvFile(filePath, { override = false } = {}) {
+    if (!fsSync.existsSync(filePath)) return [];
+    const loaded = [];
+    const lines = fsSync.readFileSync(filePath, 'utf8').split(/\r?\n/);
+    for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith('#')) continue;
+        const sep = line.indexOf('=');
+        if (sep <= 0) continue;
+        const key = line.slice(0, sep).trim();
+        const val = line.slice(sep + 1).trim().replace(/^["']|["']$/g, '');
+        if (!/^[A-Z_][A-Z0-9_]*$/.test(key)) continue;
+        if (!override && process.env[key] !== undefined) continue;
+        process.env[key] = val;
+        loaded.push(key);
+    }
+    return loaded;
+}
+
+// Load optional local env files without printing secrets.
+const envKeys = [
+    ...loadEnvFile(path.join(__dirname, '..', '.env')),
+    ...loadEnvFile(path.join(__dirname, '..', '.env.local')),
+    ...loadEnvFile(path.join(__dirname, '..', '.missiondeck')),
+];
+if (envKeys.length) {
+    console.log(`[ENV] Loaded ${envKeys.length} variables from local config files`);
 }
 
 const cookieParser = require('cookie-parser');
@@ -53,12 +68,24 @@ function sanitizeInput(val) {
 }
 
 // Configuration
-const PORT = process.env.PORT || 3001;
+const parsedPort = Number.parseInt(process.env.PORT || '3000', 10);
+const PORT = Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : 3000;
 const MISSION_CONTROL_DIR = process.env.MISSION_CONTROL_DIR || path.join(__dirname, '..', '.mission-control');
 const DASHBOARD_DIR = process.env.DASHBOARD_DIR || path.join(__dirname, '..', 'dashboard');
+const NODE_ENV = process.env.NODE_ENV === 'production' ? 'production' : 'development';
+const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '1mb';
+const configuredOrigins = (process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
+const defaultLocalOrigins = [`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`];
+const corsAllowlist = configuredOrigins.length > 0
+    ? configuredOrigins
+    : (NODE_ENV === 'production' ? defaultLocalOrigins : ['*']);
 
 // Initialize Express
 const app = express();
+app.disable('x-powered-by');
 
 // Request Logger (Debug)
 app.use((req, res, next) => {
@@ -69,8 +96,16 @@ app.use((req, res, next) => {
 // Trust proxy (nginx) for correct IP detection and rate limiting
 app.set('trust proxy', 1);
 
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+app.use(cors({
+    origin: (origin, callback) => {
+        if (!origin || corsAllowlist.includes('*') || corsAllowlist.includes(origin)) {
+            return callback(null, true);
+        }
+        return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+}));
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
 app.use(cookieParser());
 
 
@@ -169,6 +204,38 @@ app.use('/api', generalLimiter);
 // Apply strict limiter to credential and auth-sensitive routes
 app.use('/api/credentials', strictLimiter);
 app.use('/api/github/config', strictLimiter);
+
+// Basic liveness/readiness probes for production orchestration
+app.get('/api/healthz', (req, res) => {
+    res.json({
+        ok: true,
+        service: 'mission-control',
+        uptimeSec: Math.floor(process.uptime()),
+        env: NODE_ENV,
+        timestamp: new Date().toISOString(),
+    });
+});
+
+app.get('/api/readyz', async (req, res) => {
+    try {
+        await fs.access(MISSION_CONTROL_DIR);
+        await fs.access(DASHBOARD_DIR);
+        res.json({
+            ok: true,
+            missionControlDir: MISSION_CONTROL_DIR,
+            dashboardDir: DASHBOARD_DIR,
+            timestamp: new Date().toISOString(),
+        });
+    } catch (error) {
+        logger.error({ err: error.message }, 'Readiness probe failed');
+        res.status(503).json({
+            ok: false,
+            error: error.message,
+            missionControlDir: MISSION_CONTROL_DIR,
+            dashboardDir: DASHBOARD_DIR,
+        });
+    }
+});
 
 // Security middleware: sanitize named route parameters
 // app.param() runs *after* route matching so req.params is populated — unlike app.use() which is a no-op here
@@ -573,6 +640,9 @@ app.use(express.static(DASHBOARD_DIR));
 
 app.get('/api/tasks', async (req, res) => {
     try {
+        // #region agent log
+        fetch('http://127.0.0.1:7447/ingest/73735ae5-3737-4a22-8d01-f5d4ca10bf98',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c6ca70'},body:JSON.stringify({sessionId:'c6ca70',runId:'pre-fix',hypothesisId:'H4',location:'mission-control/server/index.js:/api/tasks',message:'Mission Control /api/tasks requested',data:{agent:req.query.agent||null,method:req.method},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         const tasks = await readJsonDirectory('tasks');
         res.json(tasks);
     } catch (error) {
@@ -736,6 +806,9 @@ app.put('/api/tasks/:id', async (req, res) => {
 
 app.patch('/api/tasks/:id', async (req, res) => {
     try {
+        // #region agent log
+        fetch('http://127.0.0.1:7447/ingest/73735ae5-3737-4a22-8d01-f5d4ca10bf98',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c6ca70'},body:JSON.stringify({sessionId:'c6ca70',runId:'pre-fix',hypothesisId:'H3',location:'mission-control/server/index.js:/api/tasks/:id PATCH',message:'Mission Control task patch requested',data:{taskId:req.params.id,status:req.body?.status||null,updatedBy:req.body?.updated_by||null},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         // Read existing task
         const id = sanitizeId(req.params.id);
         let task;
@@ -1610,6 +1683,9 @@ app.post('/api/webhooks/:id/retry', async (req, res) => {
 
 app.get('/api/messages', async (req, res) => {
     try {
+        // #region agent log
+        fetch('http://127.0.0.1:7447/ingest/73735ae5-3737-4a22-8d01-f5d4ca10bf98',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c6ca70'},body:JSON.stringify({sessionId:'c6ca70',runId:'pre-fix',hypothesisId:'H1',location:'mission-control/server/index.js:/api/messages',message:'Mission Control /api/messages requested',data:{agent:req.query.agent||null,method:req.method},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         const messages = await readJsonDirectory('messages');
         const agentFilter = sanitizeInput(req.query.agent);
 
@@ -1667,6 +1743,9 @@ app.post('/api/messages', async (req, res) => {
 
 app.put('/api/messages/:id/read', async (req, res) => {
     try {
+        // #region agent log
+        fetch('http://127.0.0.1:7447/ingest/73735ae5-3737-4a22-8d01-f5d4ca10bf98',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c6ca70'},body:JSON.stringify({sessionId:'c6ca70',runId:'pre-fix',hypothesisId:'H1',location:'mission-control/server/index.js:/api/messages/:id/read',message:'Mission Control message marked read endpoint called',data:{messageId:req.params.id,method:req.method},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         // SAFE: req.params.id sanitized by app.param middleware
         // SAFE: readJsonFile() validates path with isPathSafe()
         const id = sanitizeId(req.params.id);
@@ -3264,19 +3343,9 @@ app.get('*', (req, res) => {
 // START SERVER
 // =====================================
 
-server.listen(PORT, () => {
-    // Load .missiondeck env file if present and not already set
-    const missionDeckEnvFile = path.join(__dirname, '..', '.missiondeck');
-    if (!process.env.MISSIONDECK_API_KEY && require('fs').existsSync(missionDeckEnvFile)) {
-        require('fs').readFileSync(missionDeckEnvFile, 'utf8')
-            .split('\n')
-            .filter(l => l && !l.startsWith('#'))
-            .forEach(l => {
-                const [k, ...v] = l.split('=');
-                if (k && v.length) process.env[k.trim()] = v.join('=').trim();
-            });
-    }
+let isShuttingDown = false;
 
+server.listen(PORT, () => {
     // Start MissionDeck sync if configured
     if (process.env.MISSIONDECK_API_KEY) {
         const { startMissionDeckSync, startCloudPull } = require('./missiondeck-sync');
@@ -3329,4 +3398,72 @@ ${mdLine}
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
     `);
+});
+
+server.on('error', (err) => {
+    logger.error({ err: err.message }, 'HTTP server failed');
+    process.exitCode = 1;
+});
+
+async function shutdown(signal) {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    logger.info({ signal }, 'Graceful shutdown started');
+
+    try {
+        watcher.close();
+    } catch (err) {
+        logger.warn({ err: err.message }, 'Failed to close file watcher');
+    }
+
+    try {
+        webhookDelivery.stopWorker();
+    } catch (err) {
+        logger.warn({ err: err.message }, 'Failed to stop webhook worker');
+    }
+
+    try {
+        claudeSessions.stopScanner();
+    } catch (err) {
+        logger.warn({ err: err.message }, 'Failed to stop Claude scanner');
+    }
+
+    try {
+        openclawSessions.stopScanner();
+    } catch (err) {
+        logger.warn({ err: err.message }, 'Failed to stop OpenClaw scanner');
+    }
+
+    try {
+        wss.clients.forEach(client => {
+            try { client.terminate(); } catch {}
+        });
+        wss.close();
+    } catch (err) {
+        logger.warn({ err: err.message }, 'Failed to close WebSocket server');
+    }
+
+    server.close((err) => {
+        if (err) {
+            logger.error({ err: err.message }, 'Error while stopping server');
+            process.exit(1);
+        }
+        logger.info('Mission Control server stopped');
+        process.exit(0);
+    });
+
+    setTimeout(() => {
+        logger.error('Forced shutdown after timeout');
+        process.exit(1);
+    }, 10000).unref();
+}
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('unhandledRejection', (reason) => {
+    logger.error({ err: String(reason) }, 'Unhandled rejection');
+});
+process.on('uncaughtException', (err) => {
+    logger.error({ err: err.message }, 'Uncaught exception');
+    shutdown('uncaughtException');
 });

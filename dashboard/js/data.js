@@ -1009,6 +1009,9 @@ class MissionControlData {
      */
     async loadData() {
         try {
+            const demoMode =
+                new URLSearchParams(window.location.search).get('demo') === '1' ||
+                window.MC_DEMO_MODE === true;
             // Try to load from local API server first
             if (window.MissionControlAPI) {
                 console.log('Loading data from local API server...');
@@ -1022,8 +1025,20 @@ class MissionControlData {
                 }
             }
 
-            // Fall back to sample data (for static hosting without server)
-            console.log('API not available, using sample data for demonstration');
+            if (!demoMode) {
+                // Production-safe default: never show demo data as if it were live.
+                console.warn('API not available and demo mode disabled — using empty live data state');
+                this.tasks = [];
+                this.agents = [];
+                this.humans = [];
+                this.queue = [];
+                this.messages = [];
+                this.isLoaded = true;
+                return false;
+            }
+
+            // Optional demo fallback (only when explicitly enabled)
+            console.log('Demo mode enabled: using sample data for demonstration');
             this.tasks = [...SAMPLE_TASKS];
             this.agents = [...SAMPLE_AGENTS];
             this.humans = [...SAMPLE_HUMANS];
@@ -1034,14 +1049,14 @@ class MissionControlData {
             return true;
         } catch (error) {
             console.error('Error loading data:', error);
-            // Fall back to sample data
-            this.tasks = [...SAMPLE_TASKS];
-            this.agents = [...SAMPLE_AGENTS];
-            this.humans = [...SAMPLE_HUMANS];
-            this.queue = [...SAMPLE_QUEUE];
-            this.messages = [...SAMPLE_MESSAGES];
+            // Production-safe fallback in error case
+            this.tasks = [];
+            this.agents = [];
+            this.humans = [];
+            this.queue = [];
+            this.messages = [];
             this.isLoaded = true;
-            return true;
+            return false;
         }
     }
 
