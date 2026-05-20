@@ -3,8 +3,9 @@
  * Discovers and tracks OpenClaw gateway sessions across all agents.
  */
 
-const { execSync } = require('child_process');
+const { spawnSync } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 // Cache for sessions data
@@ -12,11 +13,46 @@ let cachedSessions = {
     sessions: [],
     agents: [],
     lastScan: null,
-    openclawHome: process.env.OPENCLAW_HOME || process.env.MISSION_CONTROL_DIR || './',
+    openclawHome: detectOpenclawHome(),
 };
 
 // Scan interval in ms
 const SCAN_INTERVAL = 60_000; // 1 minute
+
+let openclawCliAvailable = null;
+let openclawUnavailableLogged = false;
+
+function detectOpenclawHome() {
+    if (process.env.OPENCLAW_HOME) return process.env.OPENCLAW_HOME;
+    const candidates = [
+        path.join(os.homedir(), '.openclaw'),
+        process.env.MISSION_CONTROL_DIR,
+        path.join(__dirname, '..', '.mission-control'),
+    ].filter(Boolean);
+    for (const dir of candidates) {
+        if (fs.existsSync(dir)) return dir;
+    }
+    return process.env.MISSION_CONTROL_DIR || path.join(__dirname, '..', '.mission-control');
+}
+
+function isOpenclawCliAvailable() {
+    if (openclawCliAvailable !== null) return openclawCliAvailable;
+    const probe = spawnSync('openclaw', ['--version'], {
+        encoding: 'utf8',
+        timeout: 5000,
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    openclawCliAvailable = probe.status === 0;
+    if (!openclawCliAvailable && !openclawUnavailableLogged) {
+        openclawUnavailableLogged = true;
+        const hint = process.platform === 'win32'
+            ? 'OpenClaw CLI nicht im PATH (npm i -g openclaw oder Gateway-Integration deaktiviert).'
+            : 'OpenClaw CLI nicht gefunden (openclaw installieren oder OPENCLAW_HOME setzen).';
+        console.warn(`[openclaw-sessions] ${hint} Session-Scan übersprungen.`);
+    }
+    return openclawCliAvailable;
+}
 
 /**
  * Parse the `openclaw sessions` CLI output into structured data.
@@ -87,13 +123,24 @@ function parseSessionsOutput(output) {
  * Scan sessions for a specific agent using the openclaw CLI.
  */
 function scanAgentSessions(agentName) {
+    if (!isOpenclawCliAvailable()) return [];
+
     try {
-        const output = execSync(`openclaw sessions --agent ${agentName} 2>/dev/null`, {
+        const result = spawnSync('openclaw', ['sessions', '--agent', agentName], {
             encoding: 'utf8',
             timeout: 10000,
             env: { ...process.env, NO_COLOR: '1' },
+            windowsHide: true,
+            stdio: ['ignore', 'pipe', 'ignore'],
         });
-        return parseSessionsOutput(output);
+        if (result.status !== 0) {
+            const detail = (result.stderr || result.stdout || '').trim();
+            if (detail) {
+                console.error(`[openclaw-sessions] openclaw sessions --agent ${agentName} exit ${result.status}: ${detail}`);
+            }
+            return [];
+        }
+        return parseSessionsOutput(result.stdout || '');
     } catch (err) {
         console.error(`[openclaw-sessions] Error scanning ${agentName}: ${err.message}`);
         return [];
@@ -132,6 +179,18 @@ function getAgentList() {
  * Scan all OpenClaw sessions across all agents.
  */
 async function scanSessions() {
+    if (!isOpenclawCliAvailable()) {
+        cachedSessions = {
+            ...cachedSessions,
+            sessions: [],
+            agents: getAgentList(),
+            lastScan: new Date().toISOString(),
+            openclawHome: cachedSessions.openclawHome || detectOpenclawHome(),
+            cliAvailable: false,
+        };
+        return [];
+    }
+
     const agents = getAgentList();
     const allSessions = [];
     
@@ -157,7 +216,8 @@ async function scanSessions() {
         sessions: allSessions,
         agents,
         lastScan: new Date().toISOString(),
-        openclawHome: cachedSessions.openclawHome,
+        openclawHome: cachedSessions.openclawHome || detectOpenclawHome(),
+        cliAvailable: true,
     };
     
     console.log(`[openclaw-sessions] Scanned ${agents.length} agents, found ${allSessions.length} sessions`);

@@ -34,7 +34,7 @@ JARVIS Mission Control is a Git-based command center for managing AI agents and 
 **For local setup, you need:**
 1. Node.js ≥18 + Git
 2. Fork & clone this repo
-3. Run: `cd server && npm install && npm start`
+3. Run: `yarn install && yarn --cwd server install && yarn --cwd server start`
 4. Open: `http://localhost:3000`
 
 ---
@@ -124,8 +124,10 @@ cd JARVIS-Mission-Control-OpenClaw
 # 2. Initialize
 ./scripts/init-mission-control.sh
 
-# 3. Start the server
-cd server && npm install && npm start
+# 3. Install deps and start the server
+yarn install
+yarn --cwd server install
+yarn --cwd server start
 
 # 4. Open the dashboard
 # http://localhost:3000
@@ -140,6 +142,13 @@ Fork https://github.com/Asif2BD/JARVIS-Mission-Control-OpenClaw to my GitHub acc
 get a free API key from missiondeck.ai/auth, connect it with ./scripts/connect-missiondeck.sh,
 then read CLAUDE.md to learn how it works and set up Mission Control for my project.
 ```
+
+---
+
+## Production Setup Guide
+
+Fuer installierbaren Produktionsbetrieb (Env-Variablen, PM2, Healthchecks):
+`docs/PRODUCTION-SETUP.md`
 
 ---
 
@@ -209,7 +218,7 @@ mc status                           # Show connection mode (local / cloud)
 ### Test Suite (v1.12.0)
 
 - **51 tests** (Jest) covering CSRF, rate limiting, webhook retry, Claude session parsing, GitHub sync
-- Run: `npm test`
+- Run: `yarn test`
 
 
 

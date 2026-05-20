@@ -126,7 +126,7 @@ If you're a human setting this up:
 2. **Clone your fork** locally
 3. **Run initialization:** `./scripts/init-mission-control.sh`
 4. **Enable GitHub Pages** in repository settings (source: main branch, /dashboard folder)
-5. **Start the dashboard:** `cd server && npm install && npm start`
+5. **Start the dashboard:** `yarn install && yarn --cwd server install && yarn --cwd server start`
 6. **Start creating tasks!**
 
 ---

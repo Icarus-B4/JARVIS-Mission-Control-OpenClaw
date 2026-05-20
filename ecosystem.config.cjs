@@ -3,15 +3,19 @@ module.exports = {
     {
       name: 'mission-control-server',
       script: 'server/index.js',
-      cwd: '/root/.openclaw/workspace/agents/tank/mission-control',
+      cwd: __dirname,
       env: {
         NODE_ENV: 'production',
-        PORT: 3000,
-        MC_AUTH_USER: 'architect',
-        MC_AUTH_PASS: 'ZionMatrix2026!',
-        MC_AGENT_TOKEN: '74dc90b4c3bad295730b450f268bccfc9bc5d0c1a5afb04da929be53f3ed6221',
-        OPENCLAW_GATEWAY_TOKEN: '4cba3d164fd31935cea1ad0c98a795983c3cd30ad880f42c478f34583395c44f'
-      }
+        PORT: Number.parseInt(process.env.PORT || '3000', 10),
+        // Use runtime environment variables or .env files; do not hardcode secrets here.
+        MISSION_CONTROL_DIR: process.env.MISSION_CONTROL_DIR,
+        MC_AUTH_USER: process.env.MC_AUTH_USER,
+        MC_AUTH_PASS: process.env.MC_AUTH_PASS,
+        MC_AGENT_TOKEN: process.env.MC_AGENT_TOKEN,
+        OPENCLAW_GATEWAY_TOKEN: process.env.OPENCLAW_GATEWAY_TOKEN,
+        MISSIONDECK_API_KEY: process.env.MISSIONDECK_API_KEY,
+        MISSIONDECK_SLUG: process.env.MISSIONDECK_SLUG,
+      },
     }
   ]
 };

@@ -7,7 +7,7 @@
     "start": "node index.js",
     "bridge": "node agent-bridge.js",
     "all": "node start-all.js",
-    "dev": "node index.js --watch"
+    "dev": "node --watch index.js"
   },
   "dependencies": {
     "chokidar": "^3.5.3",
