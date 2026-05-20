@@ -6,7 +6,7 @@
  */
 
 const MissionControlAPI = {
-    baseUrl: 'http://localhost:3000', // Fixed to MC server port
+    baseUrl: (window.location.protocol === 'file:' || !window.location.hostname) ? 'http://localhost:3001' : window.location.origin,
     ws: null,
     wsReconnectAttempts: 0,
     maxReconnectAttempts: 5,

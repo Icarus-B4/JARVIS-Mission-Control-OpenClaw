@@ -1293,7 +1293,7 @@ function initDragAndDrop() {
 
 function handleDragStart(e) {
     draggedElement = e.target.closest('.task-card');
-    const taskId = draggedElement.querySelector('.task-id').textContent;
+    const taskId = draggedElement.dataset.taskId || draggedElement.querySelector('.task-id-short')?.textContent;
     draggedTask = window.missionControlData.tasks.find(t => t.id === taskId);
 
     draggedElement.classList.add('dragging');
