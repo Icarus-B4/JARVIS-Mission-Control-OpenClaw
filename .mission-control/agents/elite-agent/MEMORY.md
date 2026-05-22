@@ -170,3 +170,17 @@
 - **SDK-Version**: LiveKit Agents SDK 1.5.8 bestätigt (`AgentSession.interrupt(force=True) -> Future[None]`).
 - **AEC-Warmup reduziert (3.0s → 0.5s)**: Ein zweiter Grund für das Nicht-Reagieren auf "Stopp" war der `aec_warmup_duration`-Parameter der `AgentSession`. Standardmäßig blockiert das SDK Unterbrechungen für **3 Sekunden** nach Beginn einer KI-Sprachausgabe (Acoustic Echo Cancellation). In diesen 3s werden alle Barge-In-Versuche (inkl. "Stopp") vom SDK geschluckt. Der Wert wurde auf `0.5s` reduziert, um sofortige Reaktionsfähigkeit zu gewährleisten. Dies kann minimal mehr Echo-Feedback verursachen, aber die Steuerbarkeit der KI hat Priorität.
 
+### 2026-05-20 06:40 - MSIX-Build-Fehler: Cannot find module './pai-runtime'
+- **Ursache**: Die Datei `pai-runtime.js` war nicht in der `files`-Liste der `desktop/package.json` (Zeile 82–99) aufgeführt. Electron-Builder packt nur explizit gelistete Dateien in das ASAR-Archiv. Da `services.js` diese Datei per `require('./pai-runtime')` lädt, crashte die MSIX-installierte App beim Start mit `Cannot find module './pai-runtime'`.
+- **Fix**: `"pai-runtime.js"` wurde zur `files`-Liste in `desktop/package.json` hinzugefügt.
+- **Hinweis**: Nach dem Fix muss `pnpm run build:msix` erneut ausgeführt werden.
+
+### 2026-05-22 08:30 - Integration des kollaborativen Selbstheilungs- & Selbstlernsystems
+- **Selbstheilungssystem (`self_healing.py`)**: Implementierung eines modularen Multi-Agenten-Workflows. Diagnose-Agent (`Elite-Diag`) analysiert Tracebacks, Review-Agent (`Elite-Auditor`) prüft den Patch-Plan auf Sicherheit, Executor-Agent (`Elite-Executor`) wendet den Patch mit Backup/Restore an und Verifier-Agent (`Elite-Verifier`) prüft die Syntax (`py_compile`).
+- **Selbstlernendes System (`self_learning.py`)**: Implementierung des Konsolidierungszyklus. Erkenntnisse und Benutzer-Präferenzen werden stichpunktartig extrahiert, konsolidiert und als Markdown-Regeln in `.agent/LEARNED_RULES.md` sowie in der PAI-Gedächtnisdatenbank gesichert.
+- **LiveKit DataChannel Integration**: Agenten-Entscheidungen und Log-Einträge werden in Echtzeit über den LiveKit-Raum an das HUD-Frontend gestreamt (Präfix `[Self-Healing]`).
+- **Visual-HUD Integration (`log-stream-widget.tsx`)**: Ein interaktiver Agent Workflow Stepper wurde am oberen Rand des Log-Stream-Widgets implementiert. Dieser visualisiert die aktiven Phasen (`Diag` -> `Audit` -> `Exec` -> `Verify` -> `Learn` -> `Done`) mit farbkodierten Status-Dots (pulsierendes Cyan bei Aktivität, Grün nach Abschluss, Grau im Standby) und fließenden Verbindungslinien mittels Framer-Motion.
+- **Tools & Prompt-Anpassung**: Registrierung von `trigger_self_healing_workflow` und `trigger_learning_cycle` in `tools.py`. Erweiterung der LLM-System-Prompts (Regel 21) und Clipboard-Erkennung für proaktive Reparatur-Angebote bei Systemfehlern.
+- **Laufzeit-Verifikation**: Erfolgreiche Kompilierung aller geänderten Python-Backend-Dateien und Next.js-Frontend-Builds verifiziert.
+- **Fehlerbehebung & PAI-Synchronisation**: Ein präexistenter Parameter-Fehler in `tools.py` (`get_data_dir()`) und ein fehlender Import in `self_learning.py` (`asyncio`) wurden behoben. Die Synchronisation mit dem Daniel Miessler PAI OS funktioniert nun reibungslos im Hintergrund.
+- **HUD-Animationssimulation**: In `log-stream-widget.tsx` wurde das initiale Log-Seeding so erweitert, dass der gesamte kollaborative Selbstheilungs-Workflow auf der Oberfläche beim Starten abgespielt wird. Dies ermöglicht eine sofortige visuelle Funktionsprüfung des neuen Steppers.
