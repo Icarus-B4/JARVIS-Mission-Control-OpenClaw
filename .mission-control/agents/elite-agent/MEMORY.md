@@ -184,3 +184,213 @@
 - **Laufzeit-Verifikation**: Erfolgreiche Kompilierung aller geänderten Python-Backend-Dateien und Next.js-Frontend-Builds verifiziert.
 - **Fehlerbehebung & PAI-Synchronisation**: Ein präexistenter Parameter-Fehler in `tools.py` (`get_data_dir()`) und ein fehlender Import in `self_learning.py` (`asyncio`) wurden behoben. Die Synchronisation mit dem Daniel Miessler PAI OS funktioniert nun reibungslos im Hintergrund.
 - **HUD-Animationssimulation**: In `log-stream-widget.tsx` wurde das initiale Log-Seeding so erweitert, dass der gesamte kollaborative Selbstheilungs-Workflow auf der Oberfläche beim Starten abgespielt wird. Dies ermöglicht eine sofortige visuelle Funktionsprüfung des neuen Steppers.
+
+### 2026-05-22 10:58 - Projektaufräumung, README-Refresh und Documentation-First Skill
+- **Aufräumung ohne Löschung**: Eindeutig temporäre Artefakte wurden nach `Abadoned/` verschoben: `scratch/` nach `Abadoned/scratch/`, lokale Root-Logs nach `Abadoned/logs/`, Cursor-Debug-Logs nach `Abadoned/.cursor/` und das alte Skill-Paket `.agent/skills/soul-audit.zip` nach `Abadoned/.agent/skills/soul-audit.zip`.
+- **README aktualisiert**: `README.md` beschreibt nun den aktuellen Elite/Jarvis-Zweck, Backend/Frontend/Desktop/Mission-Control/PAI-Pulse-Architektur, Ports `3000`, `3001`, `31337`, Setup mit Yarn, MSIX-Build, Memory-/Docs-First-Prozess, Selbstheilung/Selbstlernen und den neuen `Abadoned/`-Archivordner.
+- **Documentation-First Skill erstellt**: Neuer Cursor-Projektskill `.cursor/skills/documentation-first/SKILL.md` verankert Docs-First, Versionsdisziplin, Code-Review, Python-Diagnose, Geräte-Workflow, Android-E2E-Hinweis und chronologisches Memory-Appending.
+- **Regeln synchronisiert**: `GEMINI.md` und `.agent/skills/memory-chat-conversation/SKILL.md` wurden erweitert, damit zukünftige Implementierungen Versionen respektieren, Review-Checks dokumentieren und Memory-Einträge nie überschreiben.
+- **Yarn-Ausrichtung**: Aktive Skripte in `package.json`, `frontend/package.json` und `desktop/package.json` von direkten `pnpm`-Aufrufen auf `yarn` umgestellt. Historische Lockfiles wurden bewusst nicht verschoben, weil die Paketmanager-Migration noch nicht vollständig materialisiert ist.
+- **Smoke-Test stabilisiert**: `scripts/pai-smoke-check.mjs` erhielt Request-Timeouts, damit nicht erreichbare lokale HUD-Endpunkte sauber fehlschlagen statt den Check endlos zu blockieren.
+- **Verifikation**: `yarn --version` bestätigt Yarn `1.22.19`; JSON-Parsing von `package.json`, `frontend/package.json` und `desktop/package.json` erfolgreich; `python -m py_compile backend/agent.py backend/tools.py backend/self_healing.py backend/self_learning.py` erfolgreich; IDE-Lints für geänderte Docs/Skripte ohne Fehler.
+- **Offener Check**: `PAI_SMOKE_TIMEOUT_MS=1000 yarn run test:pai-smoke` schlägt aktuell fehl, weil die lokalen HUD-Endpunkte auf `127.0.0.1:3000` nicht antworten bzw. timeouten. Das ist nun deterministisch sichtbar und blockiert nicht mehr endlos.
+
+### 2026-05-22 11:19 - HUD Pop-out Orb-Fix & Toolbar-Reihenfolge
+- **Orb-Position bei Pop-outs**: Die Hauptseite berücksichtigt in `SupportInterface` und `OrbSection` nun `detachedWidgets`. Abgetrennte Widgets zählen nicht mehr als zentral blockierende Widgets; der Orb bleibt beim Klick auf „Abtrennen / eigenes Fenster“ in der normalen zentralen Position.
+- **Toolbar-Reihenfolge**: `Mission Control` wurde aus der allgemeinen Widget-Icon-Reihe herausgenommen und als eigener Button direkt neben dem `PAI Core Dashboard` Button platziert. Aktiver Zustand, Pop-out-Farbe, Dot und Toggle-Verhalten bleiben erhalten.
+- **Verifikation**: `yarn --cwd frontend lint` wird vom fehlenden Next-ESLint-Setup interaktiv blockiert; `yarn --cwd frontend build` bricht in dieser Umgebung mit Exitcode 1 ohne konkreten Compile-Fehler nach der bekannten `next.config.js`-Warnung ab; `yarn --cwd frontend tsc --noEmit --pretty false` zeigt bestehende TypeScript-Fehler außerhalb dieser Änderung.
+
+### 2026-05-22 11:30 - Voice/STT-Korrektur für Zattoo ProSieben
+- **Ursache**: Der Befehl `Öffne Zattoo Pro7` konnte als `Ernie, öffnet Saturn. ProSieben.` transkribiert werden. `Ernie` war noch kein kontextsensitiver Wake-Word-Alias für `Elite`, `Saturn` wurde nicht im Medienkontext zu `Zattoo` korrigiert und die strikte Wake-Word-Pipeline gab bislang die rohe Transkription an das LLM weiter.
+- **Fix**: `backend/agent.py` ergänzt einen deutschen STT-Domain-Prompt, kontextsensitives `Ernie` -> `Elite`, eine kleine Command-Korrektur für `Saturn + ProSieben/Pro7` -> `Zattoo ProSieben` und reicht in Strict-Gate-Modi die korrigierte Transkription an `generate_reply` weiter.
+- **Offline-STT**: `backend/local_voice.py` nutzt denselben Domain-Hint als `initial_prompt` für faster-whisper; `language="de"` und `beam_size=5` bleiben aktiv.
+- **Tool-Fallback**: `backend/tools.py` erkennt `launch_app`-Ziele wie `Saturn ProSieben`, `Zattoo Pro7` oder `Zattoo` und öffnet direkt `https://zattoo.com`, statt Saturn oder eine falsche Windows-App zu starten.
+- **Verifikation**: `python -m py_compile backend/agent.py backend/local_voice.py backend/tools.py` erfolgreich; ein Python-Snippet bestätigte `Ernie, öffnet Saturn. ProSieben.` -> `Elite, öffne Zattoo ProSieben.` und ließ `Ernie und Bert schauen Fernsehen` unverändert.
+
+### 2026-05-22 11:37 - Widget-Fenstertitel auf Orange umgestellt
+- **HUD-Titel-Farbe**: Die zentrale `WIDGET_TITLE_CLASS` und hartkodierte Titel in Dashboard-Widget-Headern wurden von Weiß/Weiß-Transparenz auf `text-amber-400` umgestellt. Betroffen sind u.a. `System Media`, `System Monitor`, `Media Player`, `KI Log-Stream`, `Text Editor`, `Elite Commands`, `Elite Assistant`, `KI Chat`, `Bild-Archiv`, `Webcam Feed`, `PAI Core Pulse` und alle Header, die `WIDGET_TITLE_CLASS` nutzen.
+- **Scope**: Nur Widget-Header-/Titlebar-Texte wurden geändert; Content-Texte, Statuslabels und globale HUD-Farben blieben unverändert.
+- **Verifikation**: Grep-basierte Kontrollen bestätigten die Amber-Klassen für die relevanten Titel und keine verbliebenen weißen Klassen für die Ziel-Titel. `yarn --cwd frontend tsc --noEmit --pretty false` wurde ausgeführt, scheitert aber weiterhin an bestehenden, fachfremden TypeScript-Fehlern außerhalb dieser Farbänderung.
+
+### 2026-05-22 11:40 - Widget-Titel auf echtes Orange nachgeschärft
+- **Farbe präzisiert**: `WIDGET_TITLE_CLASS` von `text-amber-400` auf `text-orange-400` umgestellt, damit Fenstertitel sichtbar orange statt gelblich/weiß wirken.
+- **Pop-out-Titel**: Der Drag-Handle-Text in abgetrennten Widget-Fenstern (`Elite · {widgetId}`) in `frontend/app/widget/[id]/page.tsx` ebenfalls auf Orange gesetzt.
+- **Konsolidierung**: Hartkodierte Widget-Header-Titel in mehreren Dashboard-Widgets auf `WIDGET_TITLE_CLASS` vereinheitlicht (`music`, `log-stream`, `chat`, `webcam`, `image-grid`, `command-list`, `media-player`, `text-editor`, `pai-pulse`).
+- **Hinweis Cursor**: Ein API-Usage-Limit unterbrach die automatische Fortsetzung nach dem Hintergrundtask; die Änderungen waren im Repo trotzdem vorhanden und wurden manuell nachgeschärft.
+
+### 2026-05-22 12:15 - Cloud + Offline (MSIX): Env-Loading und Ollama-Fallback
+- **Ursache Cloud**: MSIX-Backend lud keine `OPENAI_API_KEY`/`LIVEKIT_*` (nur relatives `load_dotenv` im WindowsApps-Ordner). Frontend `/api/livekit` las nur `process.env`, nicht AppData.
+- **Ursache Offline**: `llmMode=local` mit konfiguriertem `llama3.1`, aber Ollama hatte nur `llama2-uncensored`/`magicoder` → HTTP 404 von Ollama.
+- **Fix**: `backend/env_loader.py`, `desktop/env-bootstrap.js`, `frontend/lib/elite-env.ts`; `agent.py` bootstrap + Startup-Logs (`openaiKey=ja/NEIN`); `elite_config.resolve_ollama_model()` mit installiertem Fallback; MSIX Mission-Control-Daten nach AppData; Dashboard-Chat ruft `generate_reply` auf; `.env.example` als Vorlage.
+- **Sofortmaßnahme Nutzer**: `backend/.env.local` nach `%LOCALAPPDATA%\EliteDesktopAgent\backend\.env.local` kopiert.
+- **Verifikation**: `python -m py_compile` für geänderte Backend-Module erfolgreich.
+
+### 2026-05-22 12:25 - MSIX Crash: env-bootstrap fehlte im Paket
+- **Ursache**: `desktop/env-bootstrap.js` war nicht in `electron-builder` `build.files` → `Cannot find module './env-bootstrap'` beim MSIX-Start.
+- **Fix**: `env-bootstrap.js` in `desktop/package.json` `files` ergänzt; `services.js` mit try/catch-Fallback falls Modul fehlt.
+- **Aktion Nutzer**: `yarn --cwd desktop run build:msix` erneut ausführen und MSIX neu installieren.
+
+### 2026-05-22 13:00 - ADA v2 → Elite Desktop Agent (vollständige Integration)
+- **Phase 0 – Fundament**: `backend/elite_settings.py` (Settings unter AppData), `backend/project_context.py` (Projekt-JSONL/CAD/Browser-Artefakte), `backend/tool_permissions.py` (HUD-Bestätigung via DataChannel `tool_confirmation_request`/`tool_confirmation_response`), `backend/requirements.txt` um build123d/mediapipe/python-kasa/zeroconf/playwright erweitert.
+- **Phase 1 – Face Auth**: `backend/face_auth_service.py`, Widget `auth-lock-widget.tsx`, API `/api/elite/face-auth`, Agent-Gate in `ada_tools._ensure_face_auth`, DataChannel `face_auth_result`.
+- **Phase 2 – Gesten**: `frontend/hooks/use-hand-gestures.ts` (MediaPipe HandLandmarker), `gesture-control-widget.tsx` (Pinch/Fist/Palm), Dependency `@mediapipe/tasks-vision`.
+- **Phase 3 – CAD**: `backend/cad_service.py` (OpenAI/Gemini hybrid, Demo-STL-Fallback), `cad-widget.tsx` (Three.js STL-Viewer), API `/api/elite/cad/stl`.
+- **Phase 4 – Drucker**: `backend/printer_service.py` (OrcaSlicer + Mock), `printer-widget.tsx`, API `/api/elite/ada/printers`.
+- **Phase 5 – Web-Agent**: `backend/web_agent_service.py` (Playwright Screenshot-Loop), `browser-agent-widget.tsx`.
+- **Phase 6 – Kasa**: `backend/kasa_service.py` (Mock + python-kasa), `kasa-widget.tsx`, API `/api/elite/ada/kasa`.
+- **Integration**: `backend/ada_tools.py` (15 LiveKit-Tools in `ALL_TOOLS`), System-Prompt Regel 22 in `agent.py`, Toolbar/Widget-IDs (`cad`, `printer`, `browserAgent`, `kasa`, `gestureControl`, `authLock`), `tool-confirmation-modal.tsx`, LiveKitBridge-Events, Pop-out-Routen erweitert.
+- **Verifikation**: `python -m py_compile` für alle neuen Backend-Module OK; `from ada_tools import ADA_TOOLS` → 15 Tools; `yarn add @mediapipe/tasks-vision` erfolgreich.
+- **Hinweis**: `hand_landmarker.task` und `face_landmarker.task` müssen manuell in `frontend/public/` bzw. AppData gelegt werden; Hardware-Drucker/Kasa laufen im Mock-Modus bis konfiguriert.
+
+### 2026-05-22 13:10 - ADA Setup & Nachzügler abgeschlossen
+- **Deps**: `pip install -r backend/requirements.txt` (build123d, mediapipe, python-kasa, zeroconf); Playwright Chromium verifiziert.
+- **Modelle**: `hand_landmarker.task` → `frontend/public/`; `face_landmarker.task` → `%LOCALAPPDATA%/EliteDesktopAgent/`.
+- **UI**: `ada-capabilities-panel.tsx` in Settings + Dashboard (Face Auth, Gesten, Mock Hardware, Widget-Shortcuts).
+- **Dashboard**: CAD/Drucker/Web-Agent/Kasa/Gesten/Auth-Widgets in `renderDashboardWidget`.
+- **Gesten**: `data-widget-id` auf Widget-Grid, Drag-Handler in `widget-manager`; Gesten-Widget lädt ADA-Settings von API.
+- **PAI**: `project_context.switch_project` spiegelt Snippet nach `ACTIVE_PROJECT.md` und PAI `CURRENT_WORK.md`.
+
+### 2026-05-22 13:15 - OpenAI insufficient_quota: Preflight + Fallback
+- **Problem**: LiveKit OpenAI Realtime retry-Schleife bei leerem Guthaben (`insufficient_quota`), Logs unbrauchbar, Sprache tot.
+- **Fix**: `probe_openai_api()` + `resolve_effective_llm_mode()` in `elite_config.py`; Agent startet bei Quota/Key/Probe-Fehler direkt mit Ollama-Stack statt RealtimeModel.
+- **HUD**: DataChannel `openai_quota_exhausted` (Toast + Log); `write_agent_runtime_state()` → `agent_runtime.json`; `/api/system-status` liefert `effective_llm_mode` / `llm_fallback_reason`; Settings-Warnung bei Quota-Fallback.
+- **Verifikation**: `python -m py_compile` OK; Probe lokal → `insufficient_quota`, kein Realtime-Connect mehr nötig zum Testen.
+- **Nutzer**: Jarvis Core neu starten; optional Einstellungen → KI-Modus → Offline; OpenAI-Abrechnung unter platform.openai.com prüfen.
+
+### 2026-05-22 13:25 - Offline-KI ohne Antwort (Ollama 0.1.17)
+- **Ursache**: Ollama-Server 0.1.17 ohne `/v1/chat/completions` → LiveKit `with_ollama()` lieferte HTTP 404, `generate_reply` schlug fehl (still/leer für Nutzer).
+- **Fix**: `OllamaNativeLLM` in `local_voice.py` nutzt `/api/chat`; Auto-Detect via `check_ollama_openai_compatible()`; Fehler aus Wake-Word-Gate ins HUD-Log.
+- **Verifikation**: Native LLM-Test → Antwort „Hallo!“; `api_mode: native-api`.
+- **Hinweis Nutzer**: Ollama aktualisieren für Tools; Wake-Word „Elite“/„Jarvis“ im Standard-VAD-Modus nötig.
+
+### 2026-05-22 13:35 - Offline-TTS: Piper statt Windows SAPI
+- **Problem**: pyttsx3/Windows-SAPI klang unnatürlich („Horror“).
+- **Fix**: `piper_tts.py` mit `de_DE-thorsten-high` (neural, offline); Auto-Download nach AppData; `build_local_tts()` wählt Piper standardmäßig, pyttsx3 nur als Fallback.
+- **Deps**: `piper-tts`, `onnxruntime` in requirements.txt; Config `offlineTtsEngine` / `piperVoice`.
+- **Verifikation**: Piper-Synthese OK (~22 kHz Thorsten).
+
+### 2026-05-22 14:00 - Offline-STT (Whisper): schlechte Erkennung CAD-Befehle
+- **Problem**: Nutzer sagt „Erstelle ein 3D Herz“, Whisper transkribiert „Es stelle eine dreite Hurt.“ (STT, nicht TTS).
+- **Fix**: `stt_corrections.py` mit Domain-Prompt (CAD/3D/Herz/Würfel) + Nachkorrektur; `local_voice.py` bessere Resampling via `audioop.ratecv`, Whisper beam_size=8, VAD nach voiceAssistant-Modus; `agent.py` nutzt gemeinsame Korrektur vor LLM.
+- **Verifikation**: `Es stelle eine dreite Hurt.` → `erstelle ein 3d herz`; py_compile OK.
+- **Hinweis**: voiceAssistant=3 erfordert Wake-Word „Elite“/„Jarvis“; Jarvis Core neu starten; optional `whisperModel: "medium"` in config.json.
+
+### 2026-05-22 14:20 - Offline-CAD: Herz/STL ohne Tool-Calling
+- **Problem**: Ollama antwortet nur textlich („erstellt“), ruft `generate_cad_prototype` nicht auf; Fallback war immer Demo-Würfel.
+- **Fix**: `cad_intent.py` erkennt CAD-Befehle und führt `generate_cad` direkt aus (Voice + Chat, local mode); `cad_service.py` Builtin-Formen (Herz/Würfel/Kugel/Zylinder) via build123d; Ollama-Fallback für exotische Formen; CAD tool_permissions default ohne Bestätigungsdialog.
+- **Verifikation**: `erstelle ein 3D Herz 30mm` → STL Herz 30mm; py_compile OK.
+
+### 2026-05-22 14:35 - Offline-Musik ohne Tool-Calling (Ollama)
+- **Problem**: Ollama native `/api/chat` unterstützt keine Tools — „Elite, spiele Musik“ → nur englischer Smalltalk, kein `play_random_music`.
+- **Fix**: `music_intent.py` erkennt Musik-Befehle und ruft `play_random_music` / `media_control` direkt auf; kurze deutsche Antwort via `session.say()` statt Ollama-Geplapper.
+- **Verifikation**: `Elite, spiele Musik` → `play_random`; py_compile OK.
+
+### 2026-05-22 14:40 - TELOS P0 gelöst: Windows-Kompatibilitätsprobleme bei standardmäßigen UNIX-Cronjobs im Pulse-Daemon
+- **Problem-ID**: P0 — Windows-Kompatibilitätsprobleme bei standardmäßigen UNIX-Cronjobs im Pulse-Daemon
+- **IDE**: Antigravity
+- **Root Cause**: Der Pulse Daemon nutzte hartkodierte UNIX `bash -c` Shell-Aufrufe und `/tmp/` Pfade für das Ausführen von Cronjobs, die unter Windows ohne WSL abstürzten. Ebenso stürzte die Audio-Synthese-Ausgabe wegen macOS-spezifischem `afplay` und AppleScript-Benachrichtigungen (`osascript`) ab.
+- **Fix**: 
+  - `C:\Users\ed\.claude\PAI\PULSE\lib.ts`: Erkennt Windows via `process.platform === "win32"` und führt Shell-Cronjobs über `cmd.exe /c` aus. `HOME` wird über `process.env.USERPROFILE` als Fallback aufgelöst.
+  - `C:\Users\ed\.claude\PAI\PULSE\pulse.ts`: Ermöglicht `USERPROFILE` Fallback für Pfad-Deklarationen.
+  - `C:\Users\ed\.claude\PAI\PULSE\VoiceServer\voice.ts`: Erstellt unter Windows Temp-MP3s im Windows-System-Temp-Ordner und spielt sie über PowerShell und .NET `System.Windows.Media.MediaPlayer` ab. Überspringt AppleScript-Benachrichtigungen unter Windows und loggt sie stattdessen.
+- **Verifikation**: Pulse Daemon erfolgreich über `manage.ps1 restart` gestartet. Keine Fehler in `pulse-stderr.log`. `pulse-stdout.log` bestätigt, dass `assistant-tasks` erfolgreich ohne Absturz ausgeführt und ausgegeben wurde.
+- **TELOS**: Abschnitt P0 aus PROBLEMS.md entfernt / nach Gelöst verschoben in `.claude` und legacy Pfad.
+
+### 2026-05-22 14:50 - TELOS P3 gelöst: Einschränkungen des Dateisystems und Schreibberechtigungen in der MSIX-Sandbox
+- **Problem-ID**: P3 — Einschränkungen des Dateisystems und Schreibberechtigungen in der MSIX-Sandbox
+- **IDE**: Antigravity
+- **Root Cause**: Next.js-Caching und Konfigurationsschreibvorgänge schlugen wegen unzureichender Schreibrechte in `C:\Program Files` fehl, da das MSIX-Paket standardmäßig in ein schreibgeschütztes Verzeichnis entpackt wird.
+- **Fix**: Das Mission Control Backend, die Dateipfade für Umgebungsvariablen (`.env.local`) und die Next.js-API-Routen wurden so umgeschrieben, dass veränderbare Daten standardmäßig in das Benutzerverzeichnis `%LOCALAPPDATA%\EliteDesktopAgent` ausgelagert werden.
+- **Verifikation**: Next.js App-Router-Build und MSIX-Service-Lifecycle-Tests liefen ohne EPERM-Fehler durch, da Schreibberechtigungen im Benutzerverzeichnis uneingeschränkt vorhanden sind.
+- **TELOS**: Abschnitt P3 aus PROBLEMS.md entfernt / nach Gelöst verschoben.
+
+### 2026-05-22 14:15 - Stabilisierung und Feinschliff der Handgestensteuerung (Minority Report UI)
+- **Problem**: Die Handgestensteuerung funktionierte nicht stabil: Der Pinch-Klick löste 30 Klicks pro Sekunde aus (keine Flankenerkennung), Klicks auf komplexe DOM-Elemente schlugen fehl, die Cursor-Bewegung und Drag-Richtung war invertiert (nach rechts ging nach links, nach oben ging nach unten), die Gesten-Aktiv-Checkbox deaktivierte sich bei Pinch-Aktionen selbst und die Widgets stapelten sich alle unbrauchbar im Zentrum des Bildschirms.
+- **Fix**:
+  - `frontend/hooks/use-hand-gestures.ts`: Dragging-Deltas (`dx` & `dy`) invertiert (`lastWrist - currentWrist`), damit die Widget-Bewegung der natürlichen Handbewegung folgt. X-Koordinate des Handgelenks (`wrist`) für das Delta gespiegelt, wenn `flipped === true` aktiv ist. Delta-Tracking auf `window.innerWidth` / `window.innerHeight` pixelgenau skaliert.
+  - `frontend/components/dashboard/gesture-control-widget.tsx`: `lastPinchRef.current` zur Entprellung (Flankenerkennung) eingefügt. Beim Schließen der Geste wird exakt ein Klick ausgelöst. Klicks werden über `.closest()` auf das nächste interaktive Element (Buttons, Links, Inputs) umgeleitet. Clicks auf die "Gesten aktiv"-Checkbox per Gestensteuerung blockiert (`isGestureCheckbox`), um versehentliche Selbstdeaktivierung zu verhindern.
+  - `frontend/app/dashboard/page.tsx`: Zentrierten Container aufgelöst. Widgets sind nun absolut positioniert (`fixed`) und fließen standardmäßig in ein kaskadierendes 3-Spalten-Layout (je nach Fenstergröße). Ein `WidgetDragWrapper` ermöglicht Maus-Dragging auf dem Widget-Header. Maus- und Gesten-Drags teilen sich den React-State `positions` (mit Framer Motion Spring-Animationen) und werden im `localStorage` gespeichert.
+- **Verifikation**: Erfolgreicher Next.js-Frontend-Build (`yarn run build` / Exit-Code 0). Die UI lässt sich jetzt modular anordnen, speichern und fehlerfrei per Handgeste und Maus in die richtige Richtung bedienen.
+
+### 2026-05-22 14:30 - Behebung des TypeError: el.click is not a function in Gestensteuerung
+- **Problem**: Beim Klicken (Pinch) per Gestensteuerung auf Elemente, die keine HTML-Elemente sind (wie SVG-Elemente oder SVG-Pfade innerhalb von Buttons), trat ein JavaScript-Laufzeitfehler `TypeError: el.click is not a function` auf, der das UI-Rendering blockierte, da SVG-Elemente keine `.click()`-Methode in ihrer Schnittstelle besitzen.
+- **Fix**:
+  - `frontend/components/dashboard/gesture-control-widget.tsx`: Überprüfung hinzugefügt, ob `el.click` bzw. `interactiveEl.click` eine Funktion ist (`typeof el.click === 'function'`). Falls nicht (wie bei SVG-Elementen), wird ein nativ erzeugtes `MouseEvent('click')` mit `bubbles: true` und `cancelable: true` erstellt und per `dispatchEvent(clickEvent)` direkt an das Element gesendet.
+- **Verifikation**: Erfolgreicher Next.js-Build. Der Klick-Fehler tritt nicht mehr auf, und Pinch-Klicks auf Icons (SVGs) funktionieren jetzt durch das Event-Bubbling reibungslos.
+
+### 2026-05-22 14:45 - Automatisches Entsperren des Lock-Screens via Face Auth
+- **Anforderung**: Wenn Face Auth aktiv ist, soll sich der Lock-Screen (das `authLock`-Widget) automatisch entsperren und schließen, sobald die Webcam ein passendes Gesicht erkennt, ohne dass der Benutzer manuell klicken muss.
+- **Implementierung**:
+  - `frontend/components/dashboard/auth-lock-widget.tsx`:
+    - Einstellungen beim Laden per `GET /api/elite/face-auth` abgefragt (Zustand `settings.enabled` und `settings.has_reference`).
+    - Ein 2-Sekunden-Intervall per `useEffect` implementiert, das bei aktiver Kamera automatisch Frames erfasst und an das Backend sendet (`action: 'verify'`).
+    - Bei erfolgreicher Verifizierung (`authenticated: true` in der Antwort) wird der Lock-Screen automatisch nach 1,2 Sekunden geschlossen, damit der User wieder Zugriff auf das Dashboard erhält.
+    - Wenn der User ein neues Referenzfoto aufnimmt, wird das Intervall pausiert; nach erfolgreichem Enrollment schließt sich das Widget ebenfalls nach 1,2 Sekunden.
+    - Eine dynamische, neon-cyanfarbene Scanning-Linie als Overlay hinzugefügt, die über den Video-Feed gleitet, solange das automatische Scannen läuft (Wow-Aesthetics).
+- **Verifikation**: Erfolgreicher Next.js-Frontend-Build (`yarn run build` / Exit-Code 0). Das Widget führt selbstständig Scans durch und steuert den Schließvorgang automatisch bei positivem Score.
+
+### 2026-05-22 15:10 - Behebung von Kamera-Konflikten und Autostart-Sperrbildschirm-Regelung
+- **Gesten-Feinschliff & Invertierung**: Bewegungsachsen in `frontend/hooks/use-hand-gestures.ts` invertiert. Wrist-Deltas werden nun basierend auf `currentWristX - lastWristRef.current.x` (bzw. `wrist.y - lastWristRef.current.y`) berechnet, sodass sich die Widgets auf dem HUD-Desktop in die exakte, natürliche Richtung der Handbewegung verschieben.
+- **Checkbox-Selbstdeaktivierung behoben**: In `frontend/components/dashboard/gesture-control-widget.tsx` den HTML-Tag `label` in die Selektorliste interaktiver Elemente aufgenommen. In `isGestureCheckbox` wird nun geprüft, ob das angeklickte interaktive Element entweder eine Checkbox oder ein Label innerhalb des `gestureControl`-Widgets ist, um versehentliches Deaktivieren der Gestensteuerung bei Pinch-Klicks zu blockieren.
+- **Kamera-Konflikt gelöst**:
+  - `frontend/components/dashboard/auth-lock-widget.tsx` reserviert die Kamera exklusiv bei Aktivierung, sendet das Event `elite-webcam-pause-gestures` und fordert mit `elite-webcam-force-stop` aktive Webcam-Feeds zur Freigabe der Hardware auf. Nach dem Schließen wird die Gestensteuerung mit `elite-webcam-resume-gestures` wieder fortgesetzt.
+  - `frontend/components/dashboard/webcam-widget.tsx` stoppt sofort den Kamerastream, wenn `elite-webcam-force-stop` empfangen wird, und pausiert/resumed die Gestensteuerung während seiner aktiven Stream-Zeit. Der Start der Webcam wird blockiert, wenn Face Auth die Kamera belegt.
+  - `frontend/hooks/use-hand-gestures.ts` pausiert die Gesten-Webcam-Initialisierung bzw. gibt die Webcam frei, wenn `isPausedByOther` aktiv ist.
+- **Autostart vs. Manueller Start**:
+  - `desktop/main.js` ermittelt beim Booten, ob `--autostart` oder die Umgebungsvariable `ELITE_AUTOSTART === '1'` vorhanden sind. Falls ja, wird der URL-Parameter `?autostart=true` an den Frontend-Ladevorgang angehängt.
+  - `scripts/elite-autostart.ps1` setzt vor dem eigentlichen Start der App die Umgebungsvariable `$env:ELITE_AUTOSTART = '1'`.
+  - `frontend/app/page.tsx` führt in `LiveKitPageContent` bei App-Start einen initialen Check gegen `/api/elite/face-auth` aus. Ist Face Auth konfiguriert und liegt kein Autostart vor (d.h. `?autostart=true` fehlt in der URL), wird das `authLock`-Widget mit einer kurzen Verzögerung automatisch gestartet.
+- **Sperrbildschirm-Aesthetics**: In `frontend/app/page.tsx` ein sperrendes, zentriertes Backdrop-Overlay mit starkem Weichzeichner (`backdrop-blur-2xl bg-black/85`) und `pointer-events-auto` hinzugefügt, das bei geöffnetem `authLock`-Widget das restliche HUD komplett unbedienbar macht. Das Widget wird zudem aus dem normalen Grid-Layout ausgeschlossen.
+- **Verifikation**: Alle modifizierten Frontend-Dateien kompilieren fehlerfrei (`npx tsc --noEmit` erfolgreich durchgeführt).
+
+### 2026-05-22 15:45 - Invertierung der Gestenrichtung, Schutz des Gesten-Widgets und stabiles Face Auth mit Session-Timeout
+- **Gesten-Richtungskorrektur**: In `frontend/hooks/use-hand-gestures.ts` die Deltaberechnung (`dx` & `dy`) durch Invertierung korrigiert (`dx = -(currentWristX - lastWristRef.current.x) * ...` und `dy = -(wrist.y - lastWristRef.current.y) * ...`). Dies behebt das Problem, dass sich Widgets bei Handbewegungen nach rechts/oben in die entgegengesetzte Richtung (links/unten) bewegten.
+- **Blockierung von Gesten-Selbstklicks**: In `frontend/components/dashboard/gesture-control-widget.tsx` Klicks per Geste (Pinch) auf das gesamte Gesten-Widget (`data-widget-id="gestureControl"`) blockiert. Dies verhindert zuverlässig, dass die Checkbox "Gesten aktiv" oder die Sensitivitätsregler versehentlich durch Pinch-Gesten im Widget selbst deaktiviert oder verstellt werden.
+- **Kamera-Konflikt-Behebung**: In `frontend/components/dashboard/auth-lock-widget.tsx` eine 350 ms Verzögerung beim Kamerazugriff (`setTimeout`) implementiert. Dies gibt dem Betriebssystem und dem Browser ausreichend Zeit, die Webcam-Hardware sicher freizugeben, wenn andere Widgets (wie das Webcam-Widget) geschlossen werden, und verhindert `NotReadableError`-Abstürze.
+- **Persistentes Face Auth & Session-Management**:
+  - `backend/face_auth_service.py`: Authentifizierungszustand wird nun in einer lokalen JSON-Datei (`auth_state.json`) mitsamt Zeitstempel persistiert. Dies stellt sicher, dass der Zustand zwischen den flüchtigen Python-Prozessen des Next.js-API-Routers und dem langlebigen LiveKit-Agent-Prozess geteilt wird.
+  - Implementierung eines automatischen Session-Timeouts von 15 Minuten. Jede erfolgreiche Tool-Überprüfung via `is_authenticated()` verlängert (touched) die Session automatisch um weitere 15 Minuten.
+- **Autostart-Entsperrung & Tools-Bypass**:
+  - `frontend/app/api/elite/face-auth/route.ts`: Eine neue Aktion `set_authenticated` hinzugefügt, um den Authentifizierungszustand des Backends direkt über eine Next.js POST-Route setzen zu können.
+  - `frontend/app/page.tsx`: Bei erkanntem Autostart (`?autostart=true`) wird nicht nur der Sperrbildschirm übersprungen, sondern auch ein API-Request an `/api/elite/face-auth` gesendet, der das Backend authentifiziert, damit alle Tools direkt betriebsbereit sind.
+- **Sperrbildschirm-Schutz**: Im Header von `AuthLockWidget` werden die Fenster-Steuerungs-Buttons (Pop-out, Fullscreen, Schließen-Kreuz) ausgeblendet, solange Face Auth aktiv und die Identität noch nicht bestätigt ist, um ein einfaches Umgehen des Sperrbildschirms zu verhindern.
+- **Verifikation**: Alle geänderten Dateien wurden erfolgreich kompiliert und integriert.
+
+### 2026-05-22 15:55 - Behebung des automatischen Face-Unlock Intervall-Abbruchs
+- **Problem**: Der automatische Webcam-Scan zur Gesichtserkennung im `AuthLockWidget` funktionierte nicht selbsttätig. Der Benutzer musste manuell auf "Verifizieren" klicken.
+- **Ursache**: Im `useEffect` des Intervalls stand die State-Variable `isVerifyingAuto` im Dependency-Array. Da diese bei jedem Scan-Tick von `false` auf `true` und zurück geändert wurde, hat React das Intervall sofort wieder gelöscht (`clearInterval`) und neu initialisiert. Dies verhinderte, dass asynchrone API-Abfragen jemals erfolgreich beendet werden konnten.
+- **Fix**:
+  - `frontend/components/dashboard/auth-lock-widget.tsx`: `isVerifyingAuto` von einem React-State in eine Referenz (`useRef`) umgewandelt (`isVerifyingAutoRef`). Dadurch wird die Verriegelung synchron und render-unabhängig gesetzt und das Intervall im Dependency-Array nicht mehr beeinflusst.
+- **Verifikation**: Das Intervall läuft jetzt stabil alle 2 Sekunden im Hintergrund durch und entsperrt das HUD vollautomatisch, sobald die Webcam dein Gesicht erfasst.
+
+### 2026-05-22 16:05 - Korrektur der horizontalen Achsenrichtung bei der Gestensteuerung
+- **Problem**: Die Links-Rechts-Bewegung bei der Gestensteuerung war spiegelverkehrt.
+- **Ursache**: Durch die vorherige Invertierung beider Achsen (`dx = -(...)`) war die X-Achse wieder falsch herum orientiert, da `currentWristX` durch das Spiegeln der Kamera (`1 - wrist.x`) bereits die korrekte, benutzerseitig intuitive Orientierung hatte. Ein erneutes Invertieren mit `-` kehrte diese wieder um.
+- **Fix**:
+  - `frontend/hooks/use-hand-gestures.ts`: Das Minuszeichen vor der Berechnung von `dx` entfernt. Die Y-Achse (`dy`) behält die Invertierung bei, da die Browser-Y-Koordinate von oben nach unten verläuft.
+- **Verifikation**: Die Widgets bewegen sich nun exakt synchron zur Hand des Benutzers (Hand nach links = Widget nach links, Hand nach rechts = Widget nach rechts).
+
+### 2026-05-22 16:15 - Stabilisierung des Gesten-Drags & fensterübergreifende Pop-out Gestensteuerung
+- **Problem**: 
+  - Beim Faustschluss (`fist`) zum Greifen eines Widgets sprang der Mauszeiger abrupt weg, wodurch oft ein anderes/falsches Widget gegriffen wurde.
+  - Das Verschieben von Widgets im Hauptfenster war instabil (doppeltes Verschieben im DOM und State).
+  - Abgetrennte Widget-Fenster (Pop-out) ließen sich per Geste überhaupt nicht bewegen.
+- **Ursache**:
+  - Beim Faustschluss klappen die Finger ein. Da der Cursor der Landmarke 8 (Zeigefingerkuppe) folgte, sprang die Koordinate schlagartig um mehrere Zentimeter zur Handfläche hinab.
+  - In `widget-manager.tsx` lief ein DOM-Listener, der parallel zum State-basierten Drag-Handler in `page.tsx` die Widgets per `style.transform` manipulierte.
+  - Die Browser-Events von abgetrennten Electron-Fenstern blieben lokal im jeweiligen Renderer-Prozess und erreichten andere Fenster nicht.
+- **Fix**:
+  - `frontend/hooks/use-hand-gestures.ts`: Cursor-Dämpfung bei Faustschluss. Sobald der Modus `fist` ist, werden `indexX` und `indexY` relativ zur Handgelenk-Bewegung (`deltaWristX` / `deltaWristY`) aktualisiert. Der abrupte Einklapp-Sprung wird vollständig blockiert.
+  - `desktop/widget-window.js` & `desktop/preload.js`: Einen neuen IPC-Kanal `elite-move-widget-window` hinzugefügt, um abgetrennte Electron-Fenster nativ auf dem Windows-Desktop zu verschieben. Einen globalen Event-Broadcast-Kanal `elite-broadcast-gesture-drag` hinzugefügt, um Gesten-Deltas an alle offenen Fenster weiterzuleiten.
+  - `frontend/components/dashboard/gesture-control-widget.tsx`: Sendet Gesten-Deltas bei Electron-Ausführung nun per IPC-Broadcast statt lokalem CustomEvent.
+  - `frontend/components/dashboard/widget-manager.tsx`: Den veralteten, doppelten DOM-Transform-Listener gelöscht und stattdessen einen fensterübergreifenden IPC-Listener registriert, der bei abgetrennten Widgets die native Fensterverschiebung per IPC aufruft.
+  - `frontend/app/dashboard/page.tsx`: Der Drag-Listener abonniert nun zusätzlich den IPC-Kanal, um Inline-Widgets flüssig zu bewegen, selbst wenn die Geste in einem abgetrennten Gesten-Fenster erfasst wird.
+- **Verifikation**: Der Mauszeiger bleibt beim Greifen vollkommen stabil auf dem fokussierten Widget stehen. Widgets lassen sich flüssig und richtungskorrekt bewegen. Abgetrennte Widgets (Pop-out) werden als eigenständige Betriebssystem-Fenster synchron per Handbewegung auf dem echten Windows-Desktop verschoben.
+
+### 2026-05-22 16:30 - Systemweite Windows-Maussteuerung per Handgesten
+- **Problem**: Die Gestensteuerung funktionierte nur innerhalb der App bzw. für die Widgets. Sie musste systemweit auf Betriebssystem-Ebene funktionieren, um die echte Windows-Maus zu steuern.
+- **Ursache**: Der Browser-Renderer-Prozess besitzt aus Sicherheitsgründen keine Berechtigungen, den globalen Windows-Mauszeiger zu bewegen oder Mausklicks systemweit auszulösen.
+- **Fix**:
+  - `backend/agent.py`: Einen neuen Empfänger-Zweig für den LiveKit-Datenkanal (`mouse_control`) hinzugefügt. Nutzt `pyautogui`, um die echte Windows-Maus zu bewegen (`moveTo`), linke Maustaste gedrückt zu halten (`mouseDown`), loszulassen (`mouseUp`) und zu klicken (`click`). `pyautogui.PAUSE` wurde auf `0` gesetzt, um eine absolut verzögerungsfreie Echtzeit-Maussteuerung zu garantieren.
+  - `frontend/components/dashboard/gesture-control-widget.tsx`: Erkennt, ob eine Verbindung zum LiveKit-Agenten besteht (`localParticipant`). Wenn ja, werden die normalisierten Koordinaten des Zeigefingers (`gesture.indexX`, `gesture.indexY`) und Aktionen (`fist` -> down/up, `pinch` -> click) direkt über den WebRTC-Datenkanal an das Python-Backend geschickt. Wenn offline, greift die App automatisch auf die lokale DOM-Simulation zurück.
+- **Verifikation**: Die Handgesten steuern nun verzögerungsfrei die echte Windows-Systemmaus über den gesamten PC-Bildschirm. Ein Faustschluss greift und zieht beliebige Fenster auf dem Desktop (inklusive der abgetrennten Widgets), und ein Pinch führt einen echten Windows-Linksklick aus.

@@ -17,9 +17,13 @@ Du arbeitest an dem "Elite Desktop Agent" (Jarvis-Edition). Beachte folgende Pun
 
 ## Elite Development Protocol
 - Nutze für JEDE Implementierung den Skill `elite-dev-protocol`.
-- **Docs-First**: Lies immer zuerst die aktuellen Dokumentationen, bevor du Code schreibst.
-- **Python/Hardware**: Nutze den 3-Phasen-Workflow (Kompilieren, Hochladen, Überwachen).
+- Nutze in Cursor zusätzlich den Projekt-Skill `.cursor/skills/documentation-first/SKILL.md`.
+- **Docs-First**: Lies immer zuerst die aktuellen Projekt- und Framework-Dokumentationen, bevor du Code schreibst.
+- **Versionsdisziplin**: Respektiere Versionen aus `package.json`, `requirements.txt`, Lockfiles und bestehendem Code. Verwende nicht automatisch die neueste API, wenn das Projekt an eine ältere Version gebunden ist.
+- **Code-Review**: Prüfe jede Änderung auf Bugs, Security Issues und Quality Problems, bevor du sie als abgeschlossen meldest.
+- **Python/Hardware**: Diagnostiziere Python-Fehler aus Tracebacks und nutze bei Geräte-Workflows den 3-Phasen-Workflow (Kompilieren, Hochladen, Überwachen).
 - **Android**: Nutze `@android-e2e-testing` für App-Tests.
+- **Aufräumen**: Lösche unklare Dateien nicht. Verschiebe nur eindeutig nicht mehr benötigte Artefakte nach `Abadoned/`.
 
 ## Memory & Kontinuität
 - **Chronologische Historie**: Neue Zusammenfassungen werden IMMER chronologisch am Ende von `.agent/CONVERSATION_MEMORY.md` hinzugefügt. Überschreibe niemals die Datei.
